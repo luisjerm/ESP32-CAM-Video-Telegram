@@ -308,6 +308,7 @@ bool pir_enabled = false;
 bool avi_enabled = false;
 bool tim_enabled = false;
 bool hdcam = true;
+bool flash_enabled = false;
 
 int avi_buf_size = 0;
 int idx_buf_size = 0;
@@ -354,6 +355,14 @@ uint8_t * psram_avi_ptr = 0;
 uint8_t * psram_idx_ptr = 0;
 char strftime_buf[64];
 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+//  set_flash(bool)  - switch on/off flash
+//
+void set_flash(bool st){
+  flashState = st;
+  digitalWrite(FLASH_LED_PIN, flashState);
+}
 
 void handleNewMessages(int numNewMessages) {
   //Serial.println("handleNewMessages");
@@ -376,8 +385,7 @@ void handleNewMessages(int numNewMessages) {
     bot.sendMessage(chat_id, hi, "Markdown");
     client.setHandshakeTimeout(120000);
     if (text == "/flash") {
-      flashState = !flashState;
-      digitalWrite(FLASH_LED_PIN, flashState);
+      set_flash(!flashState);
     }
 
     if (text.substring(1).toInt() >= 1 && text.substring(1).toInt() <= 1440) {
@@ -386,7 +394,7 @@ void handleNewMessages(int numNewMessages) {
       do_eprom_write();
     }
     if (text == "/status") {
-      String stat = "Device: " + devstr + "\nVer: " + String(vernum) + "\nRssi: " + String(WiFi.RSSI()) + "\nip: " +  WiFi.localIP().toString() + "\nPir Enabled: " + pir_enabled + "\nAvi Enabled: " + avi_enabled + "\nTim Enabled: " + tim_enabled;
+      String stat = "Device: " + devstr + "\nVer: " + String(vernum) + "\nRssi: " + String(WiFi.RSSI()) + "\nip: " +  WiFi.localIP().toString() + "\nFlash Enabled: " + flash_enabled + "\nPir Enabled: " + pir_enabled + "\nAvi Enabled: " + avi_enabled + "\nTim Enabled: " + tim_enabled;
       stat = stat + "\nInterval: " + frame_interval;
       stat = stat + "\nTimer: " + TimePhoto_Minutes;
 
@@ -399,6 +407,11 @@ void handleNewMessages(int numNewMessages) {
 
     if (text == "/reset") {
       reset_request = true;
+    }
+
+    if (text == "/enflash") {
+      flash_enabled = true;
+      do_eprom_write();
     }
 
     if (text == "/enpir") {
@@ -468,6 +481,9 @@ void handleNewMessages(int numNewMessages) {
       do_eprom_write();
     }
 
+    if(flash_enabled){
+      set_flash(HIGH);
+    }
 
     for (int j = 0; j < 4; j++) {
       camera_fb_t * newfb = esp_camera_fb_get();
@@ -480,15 +496,27 @@ void handleNewMessages(int numNewMessages) {
         delay(10);
       }
     }
+
+    if(flash_enabled){
+      set_flash(LOW);
+    }
+
     if ( text == "/photo" || text == "/caption" ) {
 
       fb = NULL;
+
+      if(flash_enabled){
+        set_flash(HIGH);
+      }
 
       // Take Picture with Camera
       fb = esp_camera_fb_get();
       if (!fb) {
         Serial.println("Camera capture failed");
         bot.sendMessage(chat_id, "Camera capture failed", "");
+        if(flash_enabled){
+          set_flash(LOW);
+        }
         return;
       }
 
@@ -518,6 +546,11 @@ void handleNewMessages(int numNewMessages) {
 
         Serial.println("done!");
       }
+
+      if(flash_enabled){
+        set_flash(LOW);
+      }
+
       esp_camera_fb_return(fb);
     }
 
@@ -529,12 +562,18 @@ void handleNewMessages(int numNewMessages) {
       //s->set_framesize(s, FRAMESIZE_VGA);
 
       Serial.println("\n\n\nSending VGA");
-
+      
+      if(flash_enabled){
+        set_flash(HIGH);
+      }
       // Take Picture with Camera
       fb = esp_camera_fb_get();
       if (!fb) {
         Serial.println("Camera capture failed");
         bot.sendMessage(chat_id, "Camera capture failed", "");
+        if(flash_enabled){
+          set_flash(LOW);
+        }
         return;
       }
 
@@ -549,6 +588,10 @@ void handleNewMessages(int numNewMessages) {
                             nullptr, nullptr);
 
       esp_camera_fb_return(fb);
+
+      if(flash_enabled){
+        set_flash(LOW);
+      }
     }
 
 
@@ -570,6 +613,8 @@ void handleNewMessages(int numNewMessages) {
       String welcome = "ESP32Cam Telegram BOT\n\n";
       welcome += "/photo: take a photo\n";
       welcome += "/flash: toggle flash LED\n";
+      welcome += "/enflash: enable flash with photo/video\n";
+      welcome += "/disflash: disable flash with photo/video\n";
       welcome += "/caption: photo with caption\n";
       welcome += "/clip: short video clip\n";
       welcome += "\n Configure the clip\n";
@@ -859,10 +904,15 @@ camera_fb_t *  get_good_jpeg() {
 // the_camera_loop()
 
 void the_camera_loop (void* pvParameter) {
-
+  if(flash_enabled){
+    set_flash(HIGH);
+  }
   vid_fb = get_good_jpeg(); // esp_camera_fb_get();
   if (!vid_fb) {
     Serial.println("Camera capture failed");
+    if(flash_enabled){
+      set_flash(LOW);
+    }
     //bot.sendMessage(chat_id, "Camera capture failed", "");
     return;
   }
@@ -921,6 +971,9 @@ void the_camera_loop (void* pvParameter) {
     Serial.printf("End the avi at %d.  It was %d frames, %d ms at %.2f fps...\n", millis(), frame_cnt, avi_end_time - avi_start_time, fps);
     frame_cnt = 0;             // start recording again on the next loop
     video_ready = true;
+  }
+  if(flash_enabled){
+    set_flash(LOW);
   }
   Serial.println("Deleting the camera task");
   delay(100);
@@ -1175,6 +1228,7 @@ struct eprom_data {
   char chat_id[16];
   char BOTtoken[52];
   char timzon[52];
+  bool checkflash;
 
   int eprom_good;
 };
@@ -1211,6 +1265,7 @@ void do_eprom_read() {
     max_frames = ed.max_frames;
     frame_interval = ed.frame_interval ;
     speed_up_factor = ed.speed_up_factor;
+    flash_enabled = ed.checkflash;
 
     
       Serial.println(devstr);
@@ -1237,6 +1292,7 @@ void do_eprom_read() {
     frame_interval = 125;
     speed_up_factor = 1;
     hdcam = false;
+    flash_enabled = false;
     do_eprom_write();
     wm.resetSettings();
   }
@@ -1260,6 +1316,7 @@ void do_eprom_write() {
   ed.max_frames = max_frames;
   ed.frame_interval = frame_interval ;
   ed.speed_up_factor = speed_up_factor;
+  ed.checkflash = flash_enabled;
 
   Serial.println("Writing to EPROM ...");
 
