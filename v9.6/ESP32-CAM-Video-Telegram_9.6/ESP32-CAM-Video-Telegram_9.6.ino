@@ -367,7 +367,6 @@ void handleNewMessages(int numNewMessages) {
     // chat_id = String(bot.messages[i].chat_id);
 
     String text = bot.messages[i].text;
-    Serial.printf("\nGot a message %s\n", text);
 
     String from_name = bot.messages[i].from_name;
     if (from_name == "") from_name = "Guest";
@@ -567,13 +566,6 @@ void handleNewMessages(int numNewMessages) {
       }
     }
 
-    if (text == "/freecoffee") {
-      String welcome = "ESP32Cam Telegram BOT\n\n";
-      welcome += "https://ko-fi.com/jameszah/\n";
-      welcome += "https://github.com/jameszah/ESP32-CAM-Video-Telegram\n";
-      bot.sendMessage(chat_id, welcome, "Markdown");
-    }
-
     if (text == "/start") {
       String welcome = "ESP32Cam Telegram BOT\n\n";
       welcome += "/photo: take a photo\n";
@@ -596,8 +588,6 @@ void handleNewMessages(int numNewMessages) {
       welcome += "/start: start\n\n";
       welcome += "/reset: reset wifi params\n";
       welcome += "/reboot: reboot\n";
-      welcome += "\n/freecoffee\n";
-      //welcome += "\n https://ko-fi.com/jameszah/\n";
       bot.sendMessage(chat_id, welcome, "Markdown");
     }
   }
